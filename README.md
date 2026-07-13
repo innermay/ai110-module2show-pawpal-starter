@@ -22,6 +22,43 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## ✨ Features
+
+PawPal+ currently supports the following features:
+
+**Pets and owner**
+
+- Add and manage multiple pets
+- Store pet details, medical conditions, and dietary restrictions
+- Set preferred care hours for the owner
+- Set an unavailable sleeping-time block
+- Support unavailable and preferred ranges that cross midnight
+- Prevent duplicate pet names
+
+**Tasks**
+
+- Add care tasks with duration, priority, preferred time, due date, and frequency
+- Edit the duration and priority of incomplete tasks
+- Prevent duplicate task titles for the same pet and due date
+- Mark tasks complete
+- Automatically create the next daily or weekly occurrence when a recurring task is completed
+
+**Scheduling**
+
+- Sort tasks chronologically
+- Sort tasks by priority
+- View current tasks in added order, preferred-time order, or priority order
+- Filter tasks by date, pet, and completion status
+- Generate a daily schedule
+- Skip tasks that fall outside the owner's available hours
+- Explain why each task was scheduled or skipped
+- Detect regular and overnight task conflicts
+- Keep conflicting tasks in the schedule with clear warning messages
+
+**Data**
+
+- Pets and tasks are stored in `st.session_state` during the active Streamlit session. They are not saved permanently and may reset when the Streamlit session ends or restarts.
+
 ## Getting started
 
 ### Setup
@@ -178,13 +215,69 @@ A few deliberate design decisions shape how the scheduler behaves:
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+The following steps describe a realistic session with PawPal+ so a reader can follow along without watching a video:
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+1. The user enters their name and preferred care hours in the **Owner** section.
+2. The user reviews or updates the default unavailable sleeping block of **10:00 PM to 7:00 AM** in the **Owner Availability** section.
+3. The user adds a **Pet** with details such as name, species, breed, age, sex, activity level, medical conditions, and dietary restrictions.
+4. The new pet appears in the **Your Pets** table.
+5. The user creates **Tasks** for that pet with a title, description, duration, priority, preferred time, due date, and frequency.
+6. The tasks appear in the **Current Tasks** table, where the user can change how the tasks are ordered — added order, preferred-time order, or priority order.
+7. If needed, the user can edit an incomplete task's **duration** and **priority** in the **Edit a Task** section.
+8. The user selects a date and clicks **Generate schedule**.
+9. The `Scheduler` then:
+   - Filters the incomplete tasks for the chosen date
+   - Sorts them chronologically
+   - Checks the owner's preferred care hours
+   - Checks the unavailable-time blocks
+   - Schedules the tasks the owner is available for
+   - Skips unavailable tasks and records a reason for each
+   - Displays conflict warnings for overlapping tasks
+10. The user can mark a task complete in the **Complete a Task** section.
+11. For a daily or weekly task, PawPal+ automatically creates the next occurrence (one day or seven days later). A one-time task does not create another occurrence.
+12. Pets and tasks are stored in `st.session_state` during the active Streamlit session. They are not saved permanently and may reset when the Streamlit session ends or restarts.
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+### CLI Verification Example
+
+Before the backend is used by the Streamlit UI, `main.py` verifies it directly from the terminal. Running `python3 main.py` builds a sample owner, pets, and tasks, then exercises the `Scheduler` end to end so the core logic can be checked without the UI. A concise sample of that output is shown below:
+
+```
+Generated Daily Schedule
+------------------------
+
+08:00 AM - Play session
+Pet: Mochi
+Duration: 30 minutes
+Priority: medium
+
+08:15 AM - Morning medication
+Pet: Luna
+Duration: 20 minutes
+Priority: high
+
+Conflict Warnings
+-----------------
+
+Conflict: 'Play session' for Mochi overlaps with
+'Morning medication' for Luna.
+
+Skipped Tasks
+-------------
+
+Title: Midnight snack
+Pet: Mochi
+Preferred time: 02:00 AM
+Skipped reason: Owner is unavailable during this task's time.
+
+Recurring Task Demo
+-------------------
+
+Original task: Morning feeding
+Original completed: True
+Original due date: 2026-07-13
+New occurrence due date: 2026-07-14
+New occurrence completed: False
+```
+
+**Screenshot or video** *(optional)*: Screenshots or a short video may also be included, but the written walkthrough and CLI output above are sufficient to understand how PawPal+ works.
 

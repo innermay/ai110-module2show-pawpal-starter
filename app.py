@@ -230,6 +230,18 @@ st.subheader("📋 Current Tasks")
 
 all_tasks = scheduler.get_all_tasks()
 if all_tasks:
+    # Let the user reorder the view. The sorting itself is done by the
+    # backend Scheduler so the algorithms are never duplicated here.
+    sort_choice = st.selectbox(
+        "Sort current tasks by", ["Added order", "Preferred time", "Priority"]
+    )
+    if sort_choice == "Preferred time":
+        ordered_tasks = scheduler.sort_by_time(all_tasks)
+    elif sort_choice == "Priority":
+        ordered_tasks = scheduler.sort_by_priority(all_tasks)
+    else:
+        ordered_tasks = all_tasks
+
     task_rows = [
         {
             "Title": task.title,
@@ -241,11 +253,65 @@ if all_tasks:
             "Frequency": task.frequency,
             "Completed": "Yes" if task.completed else "No",
         }
-        for task in all_tasks
+        for task in ordered_tasks
     ]
     st.table(task_rows)
 else:
     st.info("No tasks yet. Add a task above.")
+
+# ---------------------------------------------------------------------------
+# Edit a Task section
+# ---------------------------------------------------------------------------
+st.divider()
+st.subheader("✏️ Edit a Task")
+
+# Only incomplete tasks can be edited here.
+editable_tasks = scheduler.filter_tasks(completed=False)
+if not editable_tasks:
+    st.info("No incomplete tasks to edit right now.")
+else:
+    edit_options = {
+        f"{task.title} — {task.pet_name} — {task.due_date.isoformat()} — "
+        f"{task.preferred_time.strftime('%I:%M %p')}": task
+        for task in editable_tasks
+    }
+    # The selection lives OUTSIDE the form so that picking a different task
+    # reruns the page and loads that task's current values into the inputs.
+    edit_label = st.selectbox(
+        "Select an incomplete task to edit", list(edit_options.keys())
+    )
+    task_to_edit = edit_options[edit_label]
+
+    priority_choices = ["low", "medium", "high"]
+    with st.form("edit_task_form"):
+        new_duration = st.number_input(
+            "Duration (minutes)",
+            min_value=1,
+            max_value=240,
+            value=task_to_edit.duration_minutes,
+        )
+        new_priority = st.selectbox(
+            "Priority",
+            priority_choices,
+            index=priority_choices.index(task_to_edit.priority)
+            if task_to_edit.priority in priority_choices
+            else 1,
+        )
+        edit_submitted = st.form_submit_button("Save changes")
+
+    if edit_submitted:
+        # Task fields are public dataclass attributes, so we update them in
+        # place rather than creating a replacement Task object.
+        task_to_edit.duration_minutes = int(new_duration)
+        task_to_edit.priority = new_priority
+        # Clear any prior scheduling result so the next plan is recomputed.
+        task_to_edit.scheduled_time = None
+        task_to_edit.skipped_reason = None
+        st.success(
+            f"Updated '{task_to_edit.title}' for {task_to_edit.pet_name}: "
+            f"duration {task_to_edit.duration_minutes} min, "
+            f"priority {task_to_edit.priority}."
+        )
 
 # ---------------------------------------------------------------------------
 # Complete a Task section
@@ -311,9 +377,13 @@ schedule_date = st.date_input("Schedule date", value=date.today(), key="schedule
 
 if st.button("Generate schedule"):
     # Check first whether any tasks are due on this date at all (including
-    # completed ones), so we can tell "nothing to plan" apart from
-    # "everything got skipped."
+    # completed ones), and separately how many are still incomplete, so we
+    # can tell "nothing to plan", "all already done", and "everything got
+    # skipped" apart.
     tasks_for_date = scheduler.filter_tasks(date=schedule_date)
+    incomplete_tasks_for_date = scheduler.filter_tasks(
+        date=schedule_date, completed=False
+    )
     scheduled_tasks = scheduler.generate_daily_schedule(schedule_date)
     skipped_tasks = scheduler.get_skipped_tasks()
 
@@ -322,6 +392,8 @@ if st.button("Generate schedule"):
             "No tasks are due on this date. Add a task or choose "
             "a different date."
         )
+    elif not incomplete_tasks_for_date:
+        st.success("All tasks due on this date are already complete.")
     elif not scheduled_tasks:
         st.warning(
             "All incomplete tasks for this date were skipped. "

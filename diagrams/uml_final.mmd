@@ -1,0 +1,74 @@
+classDiagram
+    class Owner {
+        +str name
+        +time preferred_start_time
+        +time preferred_end_time
+        +list~Pet~ pets
+        +list~tuple~ unavailable_time_blocks
+        +dict care_preferences
+        +add_pet(pet) void
+        +remove_pet(pet_name) bool
+        +get_pet(pet_name) Pet|None
+        +add_unavailable_time(start_time, end_time) void
+        +remove_unavailable_time(start_time, end_time) void
+        +get_all_tasks() list~Task~
+    }
+
+    class Pet {
+        +str name
+        +str species
+        +str breed
+        +int age
+        +str sex
+        +str activity_level
+        +list~str~ medical_conditions
+        +list~str~ dietary_restrictions
+        +list~Task~ tasks
+        +add_task(task) void
+        +remove_task(task_title) bool
+        +get_tasks() list~Task~
+        +get_incomplete_tasks() list~Task~
+        +find_task(task_title, due_date=None) Task|None
+    }
+
+    class Task {
+        +str title
+        +str description
+        +str pet_name
+        +int duration_minutes
+        +str priority
+        +time preferred_time
+        +date due_date
+        +str frequency
+        +bool completed
+        +time|None scheduled_time
+        +str|None skipped_reason
+        +mark_complete() void
+        +mark_incomplete() void
+        +reschedule(new_time) void
+        +is_recurring() bool
+        +create_next_occurrence() Task|None
+    }
+
+    class Scheduler {
+        +Owner owner
+        +list~Task~ scheduled_tasks
+        +list~Task~ skipped_tasks
+        +list~str~ conflict_warnings
+        +get_all_tasks() list~Task~
+        +filter_tasks(date, pet_name, completed) list~Task~
+        +sort_by_time(tasks) list~Task~
+        +sort_by_priority(tasks) list~Task~
+        +is_owner_available(start_time, end_time) bool
+        +detect_conflicts(tasks) list~str~
+        +generate_daily_schedule(date) list~Task~
+        +create_recurring_task(task) Task|None
+        +mark_task_complete(task) Task|None
+        +explain_task_placement(task) str
+        +get_skipped_tasks() list~Task~
+    }
+
+    Owner "1" o-- "0..*" Pet : manages
+    Pet "1" o-- "0..*" Task : has
+    Scheduler "1" --> "1" Owner : uses
+    Scheduler ..> Task : organizes
