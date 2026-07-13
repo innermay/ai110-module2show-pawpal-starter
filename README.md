@@ -116,14 +116,26 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+The `Scheduler` organizes a pet owner's tasks into an actionable daily plan. It considers due dates and completion status, respects the owner's preferred care hours and unavailable-time blocks, creates the next occurrence of recurring tasks, and flags conflicts between tasks. The table below documents each implemented scheduling feature and the method(s) responsible for it.
 
-| Feature | Method(s) | Notes |
-|---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Feature | Method(s) | Behavior |
+|---------|-----------|----------|
+| Task sorting | `Scheduler.sort_by_time()`, `Scheduler.sort_by_priority()` | Time sorting orders tasks by `scheduled_time` when it is available and otherwise by `preferred_time`. Priority sorting orders tasks high, then medium, then low. |
+| Task filtering | `Scheduler.filter_tasks()` | Filters tasks by due date, pet name, and completion status. Only the filters that are not `None` are applied, so any combination can be used. |
+| Owner availability | `Scheduler.is_owner_available()` | A task must fit completely inside the owner's preferred care hours and must not overlap any unavailable-time block. Both normal and overnight ranges are supported. Midnight crossing is determined automatically by comparing the start and end times, so no separate `crosses_midnight` attribute is stored. Equal preferred start and end times mean an unrestricted, full-day preferred window. |
+| Conflict detection | `Scheduler.detect_conflicts()` | Detects overlapping tasks that share the same due date, using each task's duration to calculate its full time interval. Conflicts that cross midnight are supported. Tasks that only touch at a boundary are not treated as conflicts. Conflicting tasks remain in the schedule and produce warning messages. |
+| Recurring tasks | `Task.create_next_occurrence()`, `Scheduler.create_recurring_task()`, `Scheduler.mark_task_complete()` | Completing a daily task creates a new occurrence one day later; completing a weekly task creates a new occurrence seven days later. A one-time task does not create another occurrence. The next occurrence is a brand-new `Task` object that starts out incomplete. |
+| Daily schedule generation | `Scheduler.generate_daily_schedule()` | Retrieves the incomplete tasks for one date and sorts them chronologically. Tasks are scheduled when the owner is available, and skipped when they fall outside preferred hours or inside an unavailable block, with a reason recorded for each skipped task. Conflicts among the scheduled tasks are detected. The previous scheduled, skipped, and warning lists are reset before a new plan is generated. |
+| Schedule explanations | `Scheduler.explain_task_placement()`, `Scheduler.get_skipped_tasks()` | Explains why a task was scheduled or skipped. Returns the skipped tasks without exposing the original mutable list. |
+
+### Scheduling Tradeoffs
+
+A few deliberate design decisions shape how the scheduler behaves:
+
+- **Conflicts are surfaced, not resolved.** When two tasks overlap, both stay in the schedule and a warning message is shown. PawPal+ does not delete a task or automatically move it to another time; the owner decides what to do.
+- **Unavailable tasks are skipped, not relocated.** A task that falls outside the preferred care hours or inside an unavailable block is skipped with an explanation. The scheduler does not search for an alternative open slot to move it into.
+- **Exact intervals, no optimization.** The scheduler uses each task's real start time and duration to reason about availability and conflicts, but it does not try to optimize the plan by rearranging tasks or filling open gaps. It reports the plan as-is.
+- **Clarity over aggressive refactoring.** The availability logic keeps some repeated calculations visible (for example, converting times to minutes and normalizing overnight ranges). Leaving that code readable was easier to follow — and safer — than refactoring logic that already passes its tests.
 
 ## 📸 Demo Walkthrough
 

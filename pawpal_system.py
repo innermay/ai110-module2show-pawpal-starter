@@ -1,9 +1,11 @@
-"""PawPal+ core class skeletons.
+"""PawPal+ core models and scheduling algorithms.
 
 This module defines the four core classes for the PawPal+ pet-care
-scheduling application: Owner, Pet, Task, and Scheduler. Only the
-structure (attributes and method signatures) is defined here. The
-actual scheduling logic is not implemented yet.
+scheduling application: Owner, Pet, Task, and Scheduler. It contains both
+the data models and the implemented scheduling logic, including recurring
+task creation, owner-availability checks (preferred care hours plus
+unavailable-time blocks, both of which may cross midnight), task conflict
+detection, and daily schedule generation.
 
 Design assumptions (shared across all classes):
 
@@ -213,6 +215,38 @@ class Owner:
         return all_tasks
 
 
+# ---------------------------------------------------------------------------
+# Small time helpers used by the Scheduler. A full day has 1440 minutes, so
+# working in "minutes after midnight" keeps the math simple and readable.
+# ---------------------------------------------------------------------------
+MINUTES_PER_DAY = 1440
+
+
+def _time_to_minutes(value: time) -> int:
+    """Convert a datetime.time into minutes after midnight (0-1439)."""
+    return value.hour * 60 + value.minute
+
+
+def _add_minutes(value: time, minutes: int) -> time:
+    """Return the time that is a number of minutes after the given time.
+
+    Wraps around midnight, so adding 60 minutes to 11:30 PM gives 12:30 AM.
+    """
+    total = (_time_to_minutes(value) + minutes) % MINUTES_PER_DAY
+    return time(total // 60, total % 60)
+
+
+def _intervals_overlap(
+    a_start: int, a_end: int, b_start: int, b_end: int
+) -> bool:
+    """Return True if two minute-based intervals overlap.
+
+    Intervals are half-open, so two intervals that only touch at a boundary
+    (one ends exactly where the other begins) do not count as overlapping.
+    """
+    return a_start < b_end and b_start < a_end
+
+
 class Scheduler:
     """Collects and organizes tasks, checks the owner's availability,
     detects conflicts, and creates a daily pet-care plan."""
@@ -254,19 +288,136 @@ class Scheduler:
         return sorted(tasks, key=lambda task: priority_order.get(task.priority.lower(), 3))
 
     def is_owner_available(self, start_time: time, end_time: time) -> bool:
-        """Return True if the owner is available during the given time range."""
-        # NOTE: An unavailable block whose end_time is earlier than its
-        # start_time crosses midnight (an overnight block). That case will
-        # be handled during the algorithmic phase (Phase 4).
-        raise NotImplementedError
+        """Return True only when the owner is free for the whole task interval.
+
+        Two conditions must both hold:
+
+        1. The entire task fits inside the owner's preferred care window.
+        2. The task does not overlap any unavailable-time block.
+
+        The task interval, the preferred window, and any unavailable block may
+        each cross midnight. We never store a "crosses_midnight" flag; a range
+        is overnight when its end time is earlier than its start time, and we
+        then extend its end by a full day (1440 minutes) so the math stays
+        simple.
+
+        If the preferred start and end times are equal, the preferred window is
+        treated as the whole day (no preferred-hours restriction); the
+        unavailable-time blocks are still checked.
+        """
+        # Turn the proposed interval into minutes. If it ends at or before it
+        # starts, it wraps past midnight, so extend the end by a full day.
+        task_start = _time_to_minutes(start_time)
+        task_end = _time_to_minutes(end_time)
+        if task_end <= task_start:
+            task_end += MINUTES_PER_DAY
+
+        # Check 1: the whole task must fit inside the preferred care window.
+        window_start = _time_to_minutes(self.owner.preferred_start_time)
+        window_end = _time_to_minutes(self.owner.preferred_end_time)
+        if window_start != window_end:  # equal times mean "all day": no limit
+            # Normalize an overnight window into one straight interval that
+            # runs past midnight (e.g. 1320..1800 for 10:00 PM to 6:00 AM).
+            if window_end <= window_start:
+                window_end += MINUTES_PER_DAY
+            # The task fits when a shifted copy of the window fully contains it.
+            fits_in_window = False
+            for shift in (-MINUTES_PER_DAY, 0, MINUTES_PER_DAY):
+                if window_start + shift <= task_start and task_end <= window_end + shift:
+                    fits_in_window = True
+                    break
+            if not fits_in_window:
+                return False
+
+        # Check 2: the task must not overlap any unavailable-time block.
+        for block_start_time, block_end_time in self.owner.unavailable_time_blocks:
+            block_start = _time_to_minutes(block_start_time)
+            block_end = _time_to_minutes(block_end_time)
+            # Normalize an overnight block into one straight interval that
+            # runs past midnight (e.g. 1320..1860 for 10:00 PM to 7:00 AM).
+            if block_end <= block_start:
+                block_end += MINUTES_PER_DAY
+
+            # Compare against yesterday's, today's, and tomorrow's copies of
+            # the block so an early-morning task still matches an overnight
+            # block that began the previous day.
+            for shift in (-MINUTES_PER_DAY, 0, MINUTES_PER_DAY):
+                if _intervals_overlap(
+                    task_start, task_end, block_start + shift, block_end + shift
+                ):
+                    return False
+        return True
 
     def detect_conflicts(self, tasks: list[Task]) -> list[str]:
-        """Detect overlapping or conflicting tasks and return warnings."""
-        raise NotImplementedError
+        """Return warning messages for task pairs whose times overlap.
+
+        Only tasks on the same due date are compared, and each pair is checked
+        once. Tasks that merely touch at a boundary do not conflict. This
+        method compares task against task only; owner availability is handled
+        separately. Never raises; returns an empty list when there are none.
+
+        A task's end is its start plus its duration in minutes, without any
+        modulo, so a task that crosses midnight (for example 11:30 PM for 60
+        minutes) keeps a straight interval like 1410..1470. To catch overlaps
+        that span midnight, one task's interval is compared against shifted
+        copies of the other (minus a day, no shift, plus a day); a single
+        overlap in any copy counts as one conflict for that pair.
+        """
+        warnings: list[str] = []
+        for i in range(len(tasks)):
+            for j in range(i + 1, len(tasks)):
+                task_a = tasks[i]
+                task_b = tasks[j]
+                if task_a.due_date != task_b.due_date:
+                    continue
+
+                a_start = _time_to_minutes(task_a.scheduled_time or task_a.preferred_time)
+                a_end = a_start + task_a.duration_minutes
+                b_start = _time_to_minutes(task_b.scheduled_time or task_b.preferred_time)
+                b_end = b_start + task_b.duration_minutes
+
+                # Compare against yesterday's, today's, and tomorrow's copies of
+                # task B so a midnight-crossing overlap is still recognized.
+                # Report each pair at most once.
+                for shift in (-MINUTES_PER_DAY, 0, MINUTES_PER_DAY):
+                    if _intervals_overlap(a_start, a_end, b_start + shift, b_end + shift):
+                        warnings.append(
+                            f"Conflict: '{task_a.title}' for {task_a.pet_name} "
+                            f"overlaps with '{task_b.title}' for {task_b.pet_name}."
+                        )
+                        break
+        return warnings
 
     def generate_daily_schedule(self, date: date) -> list[Task]:
-        """Build and return an organized daily care plan for the given date."""
-        raise NotImplementedError
+        """Build the daily care plan for the given date.
+
+        Tasks during unavailable periods are skipped with a reason. Conflicting
+        tasks stay in the schedule and produce warning messages instead.
+        """
+        # Start fresh every call so re-running never accumulates stale data.
+        self.scheduled_tasks = []
+        self.skipped_tasks = []
+        self.conflict_warnings = []
+
+        todays_tasks = self.filter_tasks(date=date, completed=False)
+        todays_tasks = self.sort_by_time(todays_tasks)
+
+        for task in todays_tasks:
+            start_time = task.scheduled_time or task.preferred_time
+            end_time = _add_minutes(start_time, task.duration_minutes)
+
+            if self.is_owner_available(start_time, end_time):
+                task.scheduled_time = start_time
+                task.skipped_reason = None
+                self.scheduled_tasks.append(task)
+            else:
+                task.skipped_reason = (
+                    "Owner is unavailable during this task's time."
+                )
+                self.skipped_tasks.append(task)
+
+        self.conflict_warnings = self.detect_conflicts(self.scheduled_tasks)
+        return list(self.scheduled_tasks)
 
     def create_recurring_task(self, task: Task) -> Task | None:
         """Create and store the next occurrence of a recurring task."""
@@ -288,8 +439,13 @@ class Scheduler:
 
     def explain_task_placement(self, task: Task) -> str:
         """Return a short explanation of why a task was scheduled or skipped."""
-        raise NotImplementedError
+        if task.skipped_reason is not None:
+            return f"Skipped: {task.skipped_reason}"
+        if task.scheduled_time is not None:
+            time_text = task.scheduled_time.strftime("%I:%M %p")
+            return f"Scheduled at {time_text} because the owner was available."
+        return "Not scheduled yet."
 
     def get_skipped_tasks(self) -> list[Task]:
-        """Return the tasks that could not be scheduled."""
-        raise NotImplementedError
+        """Return a copy of the tasks that could not be scheduled."""
+        return list(self.skipped_tasks)

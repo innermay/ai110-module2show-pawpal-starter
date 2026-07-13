@@ -33,7 +33,30 @@ I included the following four classes:
 **b. Design changes**
 
 - Did your design change during implementation?
+Yes. The main four-class structure stayed the same, but I
+clarified several design assumptions after asking AI to review
+the initial UML and class skeletons.
+
+
 - If yes, describe at least one change and why you made it.
+I documented that all time values must use the 24-hour `HH:MM`
+format and all dates must use the `YYYY-MM-DD` format. This is
+important because the Scheduler will need to sort and compare
+times and dates consistently.
+
+I also clarified that priority values must be `low`, `medium`,
+or `high`. Pet names are treated as unique within one Owner,
+and task titles are treated as unique within one Pet. These
+assumptions make it easier to find and remove pets and tasks.
+
+I kept `pet_name` in the Task class because the Scheduler will
+combine tasks from different pets into one list. The pet name
+allows each task to identify which pet it belongs to.
+
+I also decided that `Scheduler.get_all_tasks()` should call
+`Owner.get_all_tasks()` instead of repeating the same task
+collection logic. This avoids duplicated code and keeps the
+responsibilities of each class clear.
 
 ---
 
@@ -47,7 +70,35 @@ I included the following four classes:
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
+
+One tradeoff I made was keeping the availability-checking
+algorithm slightly repetitive instead of replacing parts of it
+with another helper function. The current method separately
+converts and normalizes the owner's preferred care window and
+unavailable time blocks.
+
+AI suggested creating a shared helper method to remove the
+repeated time-conversion logic. Although that version would be
+slightly shorter and more reusable, it would also require a
+beginner reading the code to move between multiple functions
+to understand one scheduling decision.
+
+I decided to keep the current version because the full
+availability algorithm remains visible in one place. This
+makes it easier to follow how normal and overnight time ranges
+are handled.
+
 - Why is that tradeoff reasonable for this scenario?
+
+This tradeoff is reasonable because PawPal+ is a small
+pet-care application with only a few unavailable time blocks.
+The current algorithm is already fast enough, readable, and
+has passed the required boundary and overnight tests.
+
+Removing a small amount of duplicated code would not create a
+meaningful performance improvement. Keeping the tested version
+also reduces the risk of accidentally changing working
+behavior while refactoring.
 
 ---
 

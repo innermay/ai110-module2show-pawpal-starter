@@ -1,9 +1,11 @@
-"""Temporary CLI demo for PawPal+ (Phase 2, Step 2).
+"""CLI verification demo for the implemented PawPal+ backend.
 
-This script builds a small example of an Owner with pets and tasks,
-then uses the Scheduler to filter and sort those tasks. It is only a
-demo of the backend classes in pawpal_system.py. The Streamlit
-interface (app.py) will be connected in Phase 3.
+This script builds a sample Owner with pets and tasks, then exercises the
+Scheduler end to end: filtering and sorting, recurring-task creation,
+owner-availability checks (preferred care hours and unavailable-time
+blocks), conflict detection, and daily schedule generation. It prints the
+results so the backend in pawpal_system.py can be verified from the
+terminal.
 """
 
 from datetime import date, time, timedelta
@@ -18,6 +20,7 @@ def main() -> None:
         name="Mayra",
         preferred_start_time=time(7, 0),
         preferred_end_time=time(21, 0),
+        unavailable_time_blocks=[(time(22, 0), time(7, 0))],
     )
 
     # 2. Create the pets and add them through the owner's method.
@@ -142,6 +145,83 @@ def main() -> None:
         is_one_day_later = next_task.due_date == original_due_date + timedelta(days=1)
         print(f"New occurrence is one day later: {is_one_day_later}")
     print()
+
+    # 9. Add tasks that exercise the scheduling algorithms. Two of them overlap
+    #    in time (a conflict) and one falls inside the sleeping block (skipped).
+    #    We only add the tasks; the Scheduler decides what happens to them.
+    play_session = Task(
+        title="Play session",
+        description="Fetch and tug in the backyard.",
+        pet_name="Mochi",
+        duration_minutes=30,
+        priority="medium",
+        preferred_time=time(8, 0),
+        due_date=today,
+        frequency="once",
+    )
+    morning_medication = Task(
+        title="Morning medication",
+        description="Give Luna her ear-drop medication.",
+        pet_name="Luna",
+        duration_minutes=20,
+        priority="high",
+        preferred_time=time(8, 15),
+        due_date=today,
+        frequency="once",
+    )
+    midnight_snack = Task(
+        title="Midnight snack",
+        description="Late-night treat during sleeping hours.",
+        pet_name="Mochi",
+        duration_minutes=15,
+        priority="low",
+        preferred_time=time(2, 0),
+        due_date=today,
+        frequency="once",
+    )
+    mochi.add_task(play_session)
+    luna.add_task(morning_medication)
+    mochi.add_task(midnight_snack)
+
+    # 10. Let the Scheduler build the plan. It decides scheduling, conflicts,
+    #     and skips; main.py only prints what the Scheduler reports.
+    generated = scheduler.generate_daily_schedule(today)
+
+    print("Generated Daily Schedule")
+    print("------------------------")
+    print()
+    for task in generated:
+        task_time = task.scheduled_time or task.preferred_time
+        print(f"{task_time.strftime('%I:%M %p')} - {task.title}")
+        print(f"Pet: {task.pet_name}")
+        print(f"Duration: {task.duration_minutes} minutes")
+        print(f"Priority: {task.priority}")
+        print()
+
+    print("Conflict Warnings")
+    print("-----------------")
+    print()
+    if scheduler.conflict_warnings:
+        for warning in scheduler.conflict_warnings:
+            print(warning)
+    else:
+        print("No conflicts detected.")
+    print()
+
+    print("Skipped Tasks")
+    print("-------------")
+    print()
+    skipped = scheduler.get_skipped_tasks()
+    if skipped:
+        for task in skipped:
+            print(f"Title: {task.title}")
+            print(f"Pet: {task.pet_name}")
+            print(f"Preferred time: {task.preferred_time.strftime('%I:%M %p')}")
+            print(f"Skipped reason: {task.skipped_reason}")
+            print()
+    else:
+        print("No tasks were skipped.")
+        print()
 
 
 if __name__ == "__main__":
