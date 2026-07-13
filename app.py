@@ -248,17 +248,89 @@ else:
     st.info("No tasks yet. Add a task above.")
 
 # ---------------------------------------------------------------------------
+# Complete a Task section
+# ---------------------------------------------------------------------------
+st.divider()
+st.subheader("✅ Complete a Task")
+
+# Only incomplete tasks can be completed. Because a completed task's flag is
+# flipped by the backend, it drops out of this list on the next rerun, so the
+# same task can never be completed twice.
+incomplete_tasks = scheduler.filter_tasks(completed=False)
+if not incomplete_tasks:
+    st.info("No incomplete tasks right now. Add a task to get started.")
+else:
+    # Build a clear, unique label for each task so tasks that share a title
+    # but differ by pet, due date, or time can still be told apart.
+    task_options = {
+        f"{task.title} — {task.pet_name} — {task.due_date.isoformat()} — "
+        f"{task.preferred_time.strftime('%I:%M %p')}": task
+        for task in incomplete_tasks
+    }
+    with st.form("complete_task_form"):
+        selected_label = st.selectbox(
+            "Select an incomplete task", list(task_options.keys())
+        )
+        complete_submitted = st.form_submit_button("Mark task complete")
+
+    if complete_submitted:
+        # Let the backend do all the work: it marks the task complete and,
+        # for a recurring task, creates and stores the next occurrence.
+        selected_task = task_options[selected_label]
+        new_occurrence = scheduler.mark_task_complete(selected_task)
+        st.success(
+            f"Marked '{selected_task.title}' for {selected_task.pet_name} "
+            "as complete."
+        )
+        if new_occurrence is not None:
+            st.info(
+                "The next occurrence of this recurring task was created:\n\n"
+                f"- Title: {new_occurrence.title}\n"
+                f"- Pet: {new_occurrence.pet_name}\n"
+                f"- Due date: {new_occurrence.due_date.isoformat()}\n"
+                "- Preferred time: "
+                f"{new_occurrence.preferred_time.strftime('%I:%M %p')}"
+            )
+        else:
+            st.info(
+                "This was a one-time task, so no new occurrence was created."
+            )
+
+# ---------------------------------------------------------------------------
 # Generate Schedule section
 # ---------------------------------------------------------------------------
 st.divider()
 st.subheader("📅 Daily Schedule")
+st.caption(
+    "Conflicting tasks stay in the schedule and produce a warning below. "
+    "Tasks that fall outside your available hours appear in the skipped "
+    "section instead."
+)
 
 schedule_date = st.date_input("Schedule date", value=date.today(), key="schedule_date")
 
 if st.button("Generate schedule"):
+    # Check first whether any tasks are due on this date at all (including
+    # completed ones), so we can tell "nothing to plan" apart from
+    # "everything got skipped."
+    tasks_for_date = scheduler.filter_tasks(date=schedule_date)
     scheduled_tasks = scheduler.generate_daily_schedule(schedule_date)
+    skipped_tasks = scheduler.get_skipped_tasks()
 
-    if scheduled_tasks:
+    if not tasks_for_date:
+        st.info(
+            "No tasks are due on this date. Add a task or choose "
+            "a different date."
+        )
+    elif not scheduled_tasks:
+        st.warning(
+            "All incomplete tasks for this date were skipped. "
+            "See the reasons below."
+        )
+    else:
+        task_count = len(scheduled_tasks)
+        task_word = "task" if task_count == 1 else "tasks"
+        st.markdown(f"**{task_count} {task_word} scheduled**")
         st.markdown(f"**Schedule for {schedule_date.isoformat()}**")
         schedule_rows = [
             {
@@ -275,15 +347,15 @@ if st.button("Generate schedule"):
             for task in scheduled_tasks
         ]
         st.table(schedule_rows)
-    else:
-        st.info("No tasks were scheduled for the selected date.")
+        # Only celebrate a fully clean plan: no conflicts and nothing skipped.
+        if not scheduler.conflict_warnings and not skipped_tasks:
+            st.success("All tasks were scheduled with no conflicts or skips.")
 
     # Conflict warnings: conflicting tasks stay scheduled but are flagged.
     for warning in scheduler.conflict_warnings:
         st.warning(warning)
 
     # Skipped tasks: shown separately with the reason each was skipped.
-    skipped_tasks = scheduler.get_skipped_tasks()
     if skipped_tasks:
         st.markdown("**Skipped tasks**")
         skipped_rows = [
