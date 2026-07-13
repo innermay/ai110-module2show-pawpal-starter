@@ -1,0 +1,73 @@
+classDiagram
+    class Owner {
+        +name
+        +pets
+        +preferred_start_time
+        +preferred_end_time
+        +unavailable_time_blocks
+        +care_preferences
+        +add_pet(pet)
+        +remove_pet(pet_name)
+        +get_pet(pet_name)
+        +add_unavailable_time(start_time, end_time)
+        +remove_unavailable_time(start_time, end_time)
+        +get_all_tasks()
+    }
+
+    class Pet {
+        +name
+        +species
+        +breed
+        +age
+        +sex
+        +medical_conditions
+        +dietary_restrictions
+        +activity_level
+        +tasks
+        +add_task(task)
+        +remove_task(task_title)
+        +get_tasks()
+        +get_incomplete_tasks()
+        +find_task(task_title)
+    }
+
+    class Task {
+        +title
+        +description
+        +pet_name
+        +duration_minutes
+        +priority
+        +preferred_time
+        +due_date
+        +frequency
+        +completed
+        +scheduled_time
+        +skipped_reason
+        +mark_complete()
+        +mark_incomplete()
+        +reschedule(new_time)
+        +is_recurring()
+        +create_next_occurrence()
+    }
+
+    class Scheduler {
+        +owner
+        +scheduled_tasks
+        +skipped_tasks
+        +conflict_warnings
+        +get_all_tasks()
+        +filter_tasks(date, pet_name, completed)
+        +sort_by_time(tasks)
+        +sort_by_priority(tasks)
+        +is_owner_available(start_time, end_time)
+        +detect_conflicts(tasks)
+        +generate_daily_schedule(date)
+        +create_recurring_task(task)
+        +explain_task_placement(task)
+        +get_skipped_tasks()
+    }
+
+    Owner "1" o-- "0..*" Pet : manages
+    Pet "1" o-- "0..*" Task : has
+    Scheduler "1" --> "1" Owner : uses
+    Scheduler ..> Task : organizes
