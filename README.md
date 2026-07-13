@@ -100,18 +100,57 @@ Frequency: weekly
 
 ## 🧪 Testing PawPal+
 
+PawPal+ is verified by an automated test suite in `tests/test_pawpal.py`. The
+tests use plain `pytest` assertions and create `Owner`, `Pet`, `Task`, and
+`Scheduler` objects directly — no mocks, fixtures, parameterization, or
+external testing libraries. A small `make_task()` helper reduces repeated
+`Task` construction, and fixed dates are used so results are predictable.
+
+Run the complete test suite from the project root:
+
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python3 -m pytest
 ```
 
-Sample test output:
+For a detailed, per-test listing, add the `-v` flag:
+
+```bash
+python3 -m pytest -v
+```
+
+### What is covered
+
+The suite verifies the most important scheduling behaviors and edge cases:
+
+| Behavior | Test(s) |
+|----------|---------|
+| Task status and pet task counts (Phase 2) | `test_mark_complete_changes_task_status`, `test_add_task_increases_pet_task_count` |
+| Chronological sorting of out-of-order tasks | `test_sort_by_time_orders_tasks_chronologically` |
+| Daily recurrence creates a correct next occurrence | `test_mark_daily_task_complete_creates_next_occurrence` |
+| Weekly recurrence advances seven days | `test_weekly_recurrence_advances_seven_days` |
+| A one-time task creates no next occurrence | `test_one_time_task_creates_no_next_occurrence` |
+| Overlapping tasks produce exactly one warning | `test_overlapping_tasks_produce_one_warning` |
+| Boundary-touching tasks do not conflict | `test_touching_tasks_do_not_conflict` |
+| Conflicts that cross midnight are detected | `test_overnight_task_conflict_is_detected` |
+| Tasks on different dates never conflict | `test_tasks_on_different_dates_do_not_conflict` |
+| Available tasks are scheduled | `test_available_task_is_scheduled` |
+| Tasks outside preferred hours are skipped | `test_task_outside_preferred_hours_is_skipped` |
+| Tasks inside an overnight unavailable block are skipped | `test_task_in_overnight_unavailable_block_is_skipped` |
+| Schedule state resets between generated plans | `test_generate_daily_schedule_resets_previous_state` |
+| Skipped-task list is returned as a copy | `test_get_skipped_tasks_returns_a_copy` |
+
+### Sample test output
 
 ```
-# Paste your pytest output here
+============================= test session starts ==============================
+platform darwin -- Python 3.13.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/mayrahernandez/Desktop/ai110-module2show-pawpal-starter
+plugins: anyio-4.14.0
+collected 15 items
+
+tests/test_pawpal.py ...............                                     [100%]
+
+============================== 15 passed in 0.02s ==============================
 ```
 
 ## 📐 Smarter Scheduling
