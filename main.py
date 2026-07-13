@@ -6,7 +6,7 @@ demo of the backend classes in pawpal_system.py. The Streamlit
 interface (app.py) will be connected in Phase 3.
 """
 
-from datetime import date, time
+from datetime import date, time, timedelta
 
 from pawpal_system import Owner, Pet, Task, Scheduler
 
@@ -122,6 +122,26 @@ def main() -> None:
         print(f"Duration: {task.duration_minutes} minutes")
         print(f"Frequency: {task.frequency}")
         print()
+
+    # 8. Demonstrate recurring-task behavior. Completing a daily task should
+    #    automatically create its next occurrence through the scheduler.
+    daily_task = morning_feeding
+    original_due_date = daily_task.due_date
+    next_task = scheduler.mark_task_complete(daily_task)
+
+    print("Recurring Task Demo")
+    print("-------------------")
+    print()
+    print(f"Original task: {daily_task.title}")
+    print(f"Original completed: {daily_task.completed}")
+    print(f"Original due date: {original_due_date.isoformat()}")
+
+    if next_task is not None:
+        print(f"New occurrence due date: {next_task.due_date.isoformat()}")
+        print(f"New occurrence completed: {next_task.completed}")
+        is_one_day_later = next_task.due_date == original_due_date + timedelta(days=1)
+        print(f"New occurrence is one day later: {is_one_day_later}")
+    print()
 
 
 if __name__ == "__main__":

@@ -152,9 +152,10 @@ else:
             st.warning("Please enter a task title.")
         elif selected_pet is None:
             st.warning("Selected pet could not be found.")
-        elif selected_pet.find_task(new_task_title) is not None:
+        elif selected_pet.find_task(new_task_title, new_task_due_date) is not None:
             st.warning(
-                f"{selected_pet.name} already has a task titled '{new_task_title}'."
+                f"{selected_pet.name} already has a task titled "
+                f"'{new_task_title}' on {new_task_due_date.isoformat()}."
             )
         else:
             task = Task(

@@ -12,13 +12,15 @@ Design assumptions (shared across all classes):
   time_value.strftime("%H:%M") and a date with date_value.isoformat().
 * Priority values must be one of: "low", "medium", or "high".
 * Pet names are treated as unique within a single Owner.
-* Task titles are treated as unique within a single Pet.
+* A task is treated as a duplicate within a single Pet only when the pet,
+  the title (ignoring capitalization), and the due date all match. Recurring
+  tasks may therefore share a title as long as their due dates differ.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, time
+from datetime import date, time, timedelta
 
 
 @dataclass
@@ -57,9 +59,34 @@ class Task:
         """Return True if this task repeats daily or weekly."""
         return self.frequency.lower() in ("daily", "weekly")
 
-    def create_next_occurrence(self) -> Task:
-        """Create the next occurrence of a recurring task."""
-        raise NotImplementedError
+    def create_next_occurrence(self) -> Task | None:
+        """Create the next occurrence of a recurring task.
+
+        Returns a brand-new Task due one day later (daily) or seven days
+        later (weekly). Returns None for a "once" task. The completed task
+        is never modified or reused.
+        """
+        frequency = self.frequency.lower()
+        if frequency == "daily":
+            next_due_date = self.due_date + timedelta(days=1)
+        elif frequency == "weekly":
+            next_due_date = self.due_date + timedelta(days=7)
+        else:
+            return None
+
+        return Task(
+            title=self.title,
+            description=self.description,
+            pet_name=self.pet_name,
+            duration_minutes=self.duration_minutes,
+            priority=self.priority,
+            preferred_time=self.preferred_time,
+            due_date=next_due_date,
+            frequency=self.frequency,
+            completed=False,
+            scheduled_time=None,
+            skipped_reason=None,
+        )
 
 
 @dataclass
@@ -67,8 +94,10 @@ class Pet:
     """Stores information about one pet and manages the care tasks
     assigned to that pet.
 
-    Task titles are treated as unique within a single Pet, so titles can
-    be used to find or remove a task.
+    A task is treated as a duplicate only when the title (ignoring
+    capitalization) and the due date both match, so a recurring task can
+    reuse its title on a different date. Pass a due date to find_task to
+    locate one specific occurrence.
     """
 
     name: str
@@ -102,11 +131,18 @@ class Pet:
         """Return only the tasks that are not yet completed."""
         return [task for task in self.tasks if not task.completed]
 
-    def find_task(self, task_title: str) -> Task | None:
-        """Find and return a task by its title, or None if not found."""
+    def find_task(
+        self, task_title: str, due_date: date | None = None
+    ) -> Task | None:
+        """Find a task by title (ignoring capitalization), or None if not found.
+
+        When due_date is given, both the title and the due date must match.
+        When due_date is None, return the first task with the matching title.
+        """
         for task in self.tasks:
             if task.title.lower() == task_title.lower():
-                return task
+                if due_date is None or task.due_date == due_date:
+                    return task
         return None
 
 
@@ -232,9 +268,23 @@ class Scheduler:
         """Build and return an organized daily care plan for the given date."""
         raise NotImplementedError
 
-    def create_recurring_task(self, task: Task) -> Task:
-        """Create the next occurrence of a recurring task."""
-        raise NotImplementedError
+    def create_recurring_task(self, task: Task) -> Task | None:
+        """Create and store the next occurrence of a recurring task."""
+        next_task = task.create_next_occurrence()
+        if next_task is None:
+            return None
+        pet = self.owner.get_pet(task.pet_name)
+        if pet is None:
+            return None
+        pet.add_task(next_task)
+        return next_task
+
+    def mark_task_complete(self, task: Task) -> Task | None:
+        """Mark a task complete and, if recurring, create its next occurrence."""
+        task.mark_complete()
+        if task.is_recurring():
+            return self.create_recurring_task(task)
+        return None
 
     def explain_task_placement(self, task: Task) -> str:
         """Return a short explanation of why a task was scheduled or skipped."""
