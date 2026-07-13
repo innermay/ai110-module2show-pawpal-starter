@@ -4,6 +4,14 @@ This module defines the four core classes for the PawPal+ pet-care
 scheduling application: Owner, Pet, Task, and Scheduler. Only the
 structure (attributes and method signatures) is defined here. The
 actual scheduling logic is not implemented yet.
+
+Design assumptions (shared across all classes):
+
+* Time strings use 24-hour "HH:MM" format, e.g. "08:00" or "14:30".
+* Date strings use "YYYY-MM-DD" format, e.g. "2026-07-13".
+* Priority values must be one of: "low", "medium", or "high".
+* Pet names are treated as unique within a single Owner.
+* Task titles are treated as unique within a single Pet.
 """
 
 from __future__ import annotations
@@ -18,14 +26,17 @@ class Task:
 
     title: str
     description: str
+    # pet_name identifies the owning Pet. It is kept on the Task itself
+    # (even though Tasks live inside a Pet) because the Scheduler works
+    # with flat lists of tasks and must still know which pet each belongs to.
     pet_name: str
     duration_minutes: int
-    priority: str
-    preferred_time: str
-    due_date: str
+    priority: str  # one of: "low", "medium", "high"
+    preferred_time: str  # 24-hour "HH:MM", e.g. "08:00"
+    due_date: str  # "YYYY-MM-DD", e.g. "2026-07-13"
     frequency: str
     completed: bool = False
-    scheduled_time: str | None = None
+    scheduled_time: str | None = None  # 24-hour "HH:MM" once scheduled
     skipped_reason: str | None = None
 
     def mark_complete(self) -> None:
@@ -52,7 +63,11 @@ class Task:
 @dataclass
 class Pet:
     """Stores information about one pet and manages the care tasks
-    assigned to that pet."""
+    assigned to that pet.
+
+    Task titles are treated as unique within a single Pet, so titles can
+    be used to find or remove a task.
+    """
 
     name: str
     species: str
@@ -87,7 +102,12 @@ class Pet:
 
 class Owner:
     """Stores the owner's information, pets, care preferences,
-    preferred care hours, and unavailable time blocks."""
+    preferred care hours, and unavailable time blocks.
+
+    Pet names are treated as unique within a single Owner, so names can
+    be used to find or remove a pet. Preferred care hours use 24-hour
+    "HH:MM" time strings.
+    """
 
     def __init__(
         self,
@@ -147,7 +167,12 @@ class Scheduler:
         self.conflict_warnings: list[str] = []
 
     def get_all_tasks(self) -> list[Task]:
-        """Gather all tasks from the owner's pets."""
+        """Gather all tasks from the owner's pets.
+
+        During implementation this should delegate to
+        ``Owner.get_all_tasks()`` rather than repeating the
+        task-collection logic here.
+        """
         raise NotImplementedError
 
     def filter_tasks(
