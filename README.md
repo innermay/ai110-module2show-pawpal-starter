@@ -44,14 +44,58 @@ pip install -r requirements.txt
 
 ## 🖥️ Sample Output
 
-Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
+Running `python3 main.py` produces the output below, which demonstrates both chronological sorting and priority sorting using the Scheduler.
 
 ```
-# e.g.:
-# Daily plan for Biscuit (Golden Retriever):
-#   08:00 — Morning walk (30 min) [priority: high]
-#   09:00 — Feeding (10 min) [priority: high]
-#   ...
+Today's Schedule
+----------------
+
+08:00 AM - Morning feeding
+Pet: Mochi
+Duration: 10 minutes
+Priority: high
+Frequency: daily
+
+10:15 AM - Vet checkup
+Pet: Luna
+Duration: 45 minutes
+Priority: high
+Frequency: once
+
+12:00 PM - Litter box cleaning
+Pet: Luna
+Duration: 15 minutes
+Priority: low
+Frequency: weekly
+
+06:30 PM - Evening walk
+Pet: Mochi
+Duration: 30 minutes
+Priority: medium
+Frequency: daily
+
+Tasks by Priority
+-----------------
+
+HIGH - Morning feeding (Mochi)
+Time: 08:00 AM
+Duration: 10 minutes
+Frequency: daily
+
+HIGH - Vet checkup (Luna)
+Time: 10:15 AM
+Duration: 45 minutes
+Frequency: once
+
+MEDIUM - Evening walk (Mochi)
+Time: 06:30 PM
+Duration: 30 minutes
+Frequency: daily
+
+LOW - Litter box cleaning (Luna)
+Time: 12:00 PM
+Duration: 15 minutes
+Frequency: weekly
 ```
 
 ## 🧪 Testing PawPal+

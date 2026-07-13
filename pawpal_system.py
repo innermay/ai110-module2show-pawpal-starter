@@ -7,8 +7,9 @@ actual scheduling logic is not implemented yet.
 
 Design assumptions (shared across all classes):
 
-* Time strings use 24-hour "HH:MM" format, e.g. "08:00" or "14:30".
-* Date strings use "YYYY-MM-DD" format, e.g. "2026-07-13".
+* Times are datetime.time objects and dates are datetime.date objects
+  (not strings). For display, format a time with
+  time_value.strftime("%H:%M") and a date with date_value.isoformat().
 * Priority values must be one of: "low", "medium", or "high".
 * Pet names are treated as unique within a single Owner.
 * Task titles are treated as unique within a single Pet.
@@ -17,6 +18,7 @@ Design assumptions (shared across all classes):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date, time
 
 
 @dataclass
@@ -32,28 +34,28 @@ class Task:
     pet_name: str
     duration_minutes: int
     priority: str  # one of: "low", "medium", "high"
-    preferred_time: str  # 24-hour "HH:MM", e.g. "08:00"
-    due_date: str  # "YYYY-MM-DD", e.g. "2026-07-13"
+    preferred_time: time
+    due_date: date
     frequency: str
     completed: bool = False
-    scheduled_time: str | None = None  # 24-hour "HH:MM" once scheduled
+    scheduled_time: time | None = None  # set once the task is scheduled
     skipped_reason: str | None = None
 
     def mark_complete(self) -> None:
         """Mark this task as completed."""
-        raise NotImplementedError
+        self.completed = True
 
     def mark_incomplete(self) -> None:
         """Mark this task as not completed."""
-        raise NotImplementedError
+        self.completed = False
 
-    def reschedule(self, new_time: str) -> None:
+    def reschedule(self, new_time: time) -> None:
         """Change the scheduled time of this task."""
-        raise NotImplementedError
+        self.scheduled_time = new_time
 
     def is_recurring(self) -> bool:
-        """Return True if this task repeats on a schedule."""
-        raise NotImplementedError
+        """Return True if this task repeats daily or weekly."""
+        return self.frequency.lower() in ("daily", "weekly")
 
     def create_next_occurrence(self) -> Task:
         """Create the next occurrence of a recurring task."""
@@ -80,24 +82,32 @@ class Pet:
     tasks: list[Task] = field(default_factory=list)
 
     def add_task(self, task: Task) -> None:
-        """Add a care task to this pet."""
-        raise NotImplementedError
+        """Add a care task to this pet, ensuring its pet_name matches."""
+        task.pet_name = self.name
+        self.tasks.append(task)
 
-    def remove_task(self, task_title: str) -> None:
-        """Remove a task from this pet by its title."""
-        raise NotImplementedError
+    def remove_task(self, task_title: str) -> bool:
+        """Remove a task by title; return True if removed, else False."""
+        for task in self.tasks:
+            if task.title.lower() == task_title.lower():
+                self.tasks.remove(task)
+                return True
+        return False
 
     def get_tasks(self) -> list[Task]:
-        """Return all tasks assigned to this pet."""
-        raise NotImplementedError
+        """Return a copy of all tasks assigned to this pet."""
+        return list(self.tasks)
 
     def get_incomplete_tasks(self) -> list[Task]:
         """Return only the tasks that are not yet completed."""
-        raise NotImplementedError
+        return [task for task in self.tasks if not task.completed]
 
     def find_task(self, task_title: str) -> Task | None:
         """Find and return a task by its title, or None if not found."""
-        raise NotImplementedError
+        for task in self.tasks:
+            if task.title.lower() == task_title.lower():
+                return task
+        return None
 
 
 class Owner:
@@ -105,25 +115,25 @@ class Owner:
     preferred care hours, and unavailable time blocks.
 
     Pet names are treated as unique within a single Owner, so names can
-    be used to find or remove a pet. Preferred care hours use 24-hour
-    "HH:MM" time strings.
+    be used to find or remove a pet. Preferred care hours use
+    datetime.time objects.
     """
 
     def __init__(
         self,
         name: str,
-        preferred_start_time: str,
-        preferred_end_time: str,
+        preferred_start_time: time,
+        preferred_end_time: time,
         pets: list[Pet] | None = None,
-        unavailable_time_blocks: list[tuple[str, str]] | None = None,
+        unavailable_time_blocks: list[tuple[time, time]] | None = None,
         care_preferences: dict[str, str] | None = None,
     ) -> None:
         """Create an owner with care preferences and an optional list of pets."""
         self.name: str = name
-        self.preferred_start_time: str = preferred_start_time
-        self.preferred_end_time: str = preferred_end_time
+        self.preferred_start_time: time = preferred_start_time
+        self.preferred_end_time: time = preferred_end_time
         self.pets: list[Pet] = pets if pets is not None else []
-        self.unavailable_time_blocks: list[tuple[str, str]] = (
+        self.unavailable_time_blocks: list[tuple[time, time]] = (
             unavailable_time_blocks if unavailable_time_blocks is not None else []
         )
         self.care_preferences: dict[str, str] = (
@@ -132,27 +142,39 @@ class Owner:
 
     def add_pet(self, pet: Pet) -> None:
         """Add a pet to this owner."""
-        raise NotImplementedError
+        self.pets.append(pet)
 
-    def remove_pet(self, pet_name: str) -> None:
-        """Remove a pet from this owner by its name."""
-        raise NotImplementedError
+    def remove_pet(self, pet_name: str) -> bool:
+        """Remove a pet by name; return True if removed, else False."""
+        for pet in self.pets:
+            if pet.name.lower() == pet_name.lower():
+                self.pets.remove(pet)
+                return True
+        return False
 
     def get_pet(self, pet_name: str) -> Pet | None:
         """Find and return a pet by its name, or None if not found."""
-        raise NotImplementedError
+        for pet in self.pets:
+            if pet.name.lower() == pet_name.lower():
+                return pet
+        return None
 
-    def add_unavailable_time(self, start_time: str, end_time: str) -> None:
+    def add_unavailable_time(self, start_time: time, end_time: time) -> None:
         """Add a time block during which the owner is unavailable."""
-        raise NotImplementedError
+        self.unavailable_time_blocks.append((start_time, end_time))
 
-    def remove_unavailable_time(self, start_time: str, end_time: str) -> None:
+    def remove_unavailable_time(self, start_time: time, end_time: time) -> None:
         """Remove a previously added unavailable time block."""
-        raise NotImplementedError
+        block = (start_time, end_time)
+        if block in self.unavailable_time_blocks:
+            self.unavailable_time_blocks.remove(block)
 
     def get_all_tasks(self) -> list[Task]:
-        """Return all tasks across all of this owner's pets."""
-        raise NotImplementedError
+        """Return all tasks combined across all of this owner's pets."""
+        all_tasks: list[Task] = []
+        for pet in self.pets:
+            all_tasks.extend(pet.get_tasks())
+        return all_tasks
 
 
 class Scheduler:
@@ -167,40 +189,46 @@ class Scheduler:
         self.conflict_warnings: list[str] = []
 
     def get_all_tasks(self) -> list[Task]:
-        """Gather all tasks from the owner's pets.
-
-        During implementation this should delegate to
-        ``Owner.get_all_tasks()`` rather than repeating the
-        task-collection logic here.
-        """
-        raise NotImplementedError
+        """Gather all tasks by delegating to Owner.get_all_tasks()."""
+        return self.owner.get_all_tasks()
 
     def filter_tasks(
         self,
-        date: str | None = None,
+        date: date | None = None,
         pet_name: str | None = None,
         completed: bool | None = None,
     ) -> list[Task]:
-        """Return tasks filtered by date, pet name, and/or completion status."""
-        raise NotImplementedError
+        """Return tasks matching the given filters (only non-None ones apply)."""
+        tasks = self.get_all_tasks()
+        if date is not None:
+            tasks = [task for task in tasks if task.due_date == date]
+        if pet_name is not None:
+            tasks = [task for task in tasks if task.pet_name.lower() == pet_name.lower()]
+        if completed is not None:
+            tasks = [task for task in tasks if task.completed == completed]
+        return tasks
 
     def sort_by_time(self, tasks: list[Task]) -> list[Task]:
-        """Return the given tasks sorted by their scheduled/preferred time."""
-        raise NotImplementedError
+        """Return tasks sorted by scheduled_time, falling back to preferred_time."""
+        return sorted(tasks, key=lambda task: task.scheduled_time or task.preferred_time)
 
     def sort_by_priority(self, tasks: list[Task]) -> list[Task]:
-        """Return the given tasks sorted by priority."""
-        raise NotImplementedError
+        """Return tasks sorted by priority: high, then medium, then low."""
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        return sorted(tasks, key=lambda task: priority_order.get(task.priority.lower(), 3))
 
-    def is_owner_available(self, start_time: str, end_time: str) -> bool:
+    def is_owner_available(self, start_time: time, end_time: time) -> bool:
         """Return True if the owner is available during the given time range."""
+        # NOTE: An unavailable block whose end_time is earlier than its
+        # start_time crosses midnight (an overnight block). That case will
+        # be handled during the algorithmic phase (Phase 4).
         raise NotImplementedError
 
     def detect_conflicts(self, tasks: list[Task]) -> list[str]:
         """Detect overlapping or conflicting tasks and return warnings."""
         raise NotImplementedError
 
-    def generate_daily_schedule(self, date: str) -> list[Task]:
+    def generate_daily_schedule(self, date: date) -> list[Task]:
         """Build and return an organized daily care plan for the given date."""
         raise NotImplementedError
 
